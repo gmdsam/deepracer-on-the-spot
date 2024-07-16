@@ -1,33 +1,48 @@
+import math
+
+
+class Params:
+    is_off_track = False
+    prev_steps = None
+
+
 def reward_function(params):
     '''
     Example of penalize steering, which helps mitigate zig-zag behaviors
     '''
+    if params["is_offtrack"]:
+        return 1e-3
+
+    speed_weight = 100
+    heading_weight = 100
+    steering_weight = 50
+
+    max_speed_reward = 10 * 10
+    min_speed_reward = 3.33 * 3.33
+    abs_speed_reward = params['speed'] * params['speed']
+    speed_reward = ((abs_speed_reward - min_speed_reward) / (max_speed_reward - min_speed_reward)) * speed_weight
+
+    # Calculate the direction of the center line based on the closest waypoints
+    next_point = params['waypoints'][params['closest_waypoints'][1]]
+    prev_point = params['waypoints'][params['closest_waypoints'][0]]
+
+    # Calculate the direction in radius, arctan2(dy, dx), the result is (-pi, pi) in radians
+    track_direction = math.atan2(next_point[1] - prev_point[1], next_point[0] - prev_point[0]) 
+    # Convert to degree
+    track_direction = math.degrees(track_direction)
+
+    # Calculate the difference between the track direction and the heading direction of the car
+    direction_diff = abs(track_direction - params['heading'])
+    if direction_diff > 180:
+        direction_diff = 360 - direction_diff
     
-    # Read input parameters
-    distance_from_center = params['distance_from_center']
-    track_width = params['track_width']
-    steering = abs(params['steering_angle']) # Only need the absolute steering angle
+    abs_heading_reward = 1 - (direction_diff / 180.0)
+    heading_reward = abs_heading_reward * heading_weight
+    
+    # - - - - -
+    
+    # Reward if steering angle is aligned with direction difference
+    abs_steering_reward = 1 - (abs(params['steering_angle'] - direction_diff) / 180.0)
+    steering_reward = abs_steering_reward * steering_weight
 
-    # Calculate 3 marks that are farther and father away from the center line
-    marker_1 = 0.1 * track_width
-    marker_2 = 0.25 * track_width
-    marker_3 = 0.5 * track_width
-
-    # Give higher reward if the car is closer to center line and vice versa
-    if distance_from_center <= marker_1:
-        reward = 1
-    elif distance_from_center <= marker_2:
-        reward = 0.5
-    elif distance_from_center <= marker_3:
-        reward = 0.1
-    else:
-        reward = 1e-3  # likely crashed/ close to off track
-
-    # Steering penality threshold, change the number based on your action space setting
-    ABS_STEERING_THRESHOLD = 15
-
-    # Penalize reward if the car is steering too much
-    if steering > ABS_STEERING_THRESHOLD:
-        reward *= 0.8
-
-    return float(reward)
+    return speed_reward + heading_reward + steering_reward

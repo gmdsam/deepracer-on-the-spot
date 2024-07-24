@@ -13,7 +13,11 @@ class Reward:
     STEERING_FACTOR = 0.1
 
     def __init__(self):
+        self.reset_prev_params()
+
+    def reset_prev_params(self):
         self.prev_steps = None
+        self.intermediate_progress_reward = [0] * 12
 
     def read_params(self, params):
         # Read input parameters
@@ -52,7 +56,7 @@ class Reward:
         # Calculate the difference between the track direction and the car's intended direction
         direction_diff = abs(track_direction - direction)
         if direction_diff > 180:
-            direction_diff = 360 - direction_diff
+            direction_diff = abs(360 - direction_diff)
 
         return direction_diff
 
@@ -93,9 +97,20 @@ class Reward:
         else:
             self.reward = 0.8 * self.reward
 
+    def progress_reward(self):
+        MAX_PROGRESS_REWARD_MULTIPLIER = 5
+        TIME_THRESHOLD = 10.0
+        progress_checkpoint = int(self.progress // 10)
+        print((self.progress * TIME_THRESHOLD / 100) / (self.steps / 15))
+        if self.intermediate_progress_reward[progress_checkpoint] == 0:
+            self.intermediate_progress_reward[progress_checkpoint] = MAX_PROGRESS_REWARD_MULTIPLIER * ((self.progress * TIME_THRESHOLD / 100) / (self.steps/15))
+            self.reward += self.intermediate_progress_reward[progress_checkpoint]
+
     def reward_function(self, params):
         self.read_params(params)
-        print(params)
+
+        if self.prev_steps is None or self.steps < self.prev_steps:
+            self.reset_prev_params()
 
         if self.is_penalized:
             return self.reward
@@ -104,8 +119,9 @@ class Reward:
         self.direction_reward()
         self.heading_reward()
         self.steering_reward()
+        self.progress_reward()
+        self.prev_steps = self.steps
 
-        print(self.reward)
         return self.reward
 
 

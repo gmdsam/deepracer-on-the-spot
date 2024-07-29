@@ -1,16 +1,18 @@
 import math
-from functools import cached_property
 
 
 class Reward:
-    DEFAULT_REWARD = 1e-7
-    LAST_WAYPOINT_INDEX = 154
+    DEFAULT_REWARD = 1e-4
     CAR_DIRECTION_DIFFERENCE_THRESHOLD = 5
-    CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR = 0.5
+    CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR = 0.3
     HEADING_DIRECTION_DIFFERENCE_THRESHOLD = 15
-    HEADING_FACTOR = 0.1
+    HEADING_FACTOR = 0.25
     STEERING_THRESHOLD = 15
     STEERING_FACTOR = 0.1
+    DISTANCE_FACTOR = 0.2
+    SPEED_FACTOR = 0.25
+    MIN_SPEED = 1.5
+    MAX_SPEED = 4.0
 
     def __init__(self):
         self.reset_prev_params()
@@ -33,6 +35,7 @@ class Reward:
         self.heading = params['heading']
         self.all_wheels_on_track = params['all_wheels_on_track']
         self.reward = self.DEFAULT_REWARD
+        self.total_waypoints = len(self.waypoints)
 
     @property
     def is_penalized(self):
@@ -45,7 +48,7 @@ class Reward:
 
     def direction_difference(self, direction):
         # Calculate the direction of the center line based on the closest waypoints
-        next_point = self.waypoints[(self.closest_waypoints[1] + 1) % 155]
+        next_point = self.waypoints[(self.closest_waypoints[1] + 1) % self.total_waypoints]
         prev_point = self.waypoints[self.closest_waypoints[0]]
 
         # Calculate the direction in radius, arctan2(dy, dx), the result is (-pi, pi) in radians
@@ -83,28 +86,34 @@ class Reward:
     def distance_reward(self):
         DISTANCE_THRESHOLD = 0.45 * self.track_width
         if self.distance_from_center <= DISTANCE_THRESHOLD:
-            self.reward += 1 - (2 * self.distance_from_center / self.track_width)
+            self.reward += (1 - (2 * self.distance_from_center / self.track_width)) * self.DISTANCE_FACTOR
 
     def direction_reward(self):
-        self.reward += (self.CAR_DIRECTION_DIFFERENCE_THRESHOLD - self.car_direction_diff) * self.CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR
+        self.reward += ((self.CAR_DIRECTION_DIFFERENCE_THRESHOLD - self.car_direction_diff) / self.CAR_DIRECTION_DIFFERENCE_THRESHOLD) * self.CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR
 
     def heading_reward(self):
-        self.reward += (self.HEADING_DIRECTION_DIFFERENCE_THRESHOLD - self.heading_direction_diff) * self.HEADING_FACTOR
-
-    def steering_reward(self):
-        if abs(self.steering_angle) <= self.STEERING_THRESHOLD:
-            self.reward += (self.STEERING_THRESHOLD - abs(self.steering_angle)) * self.STEERING_FACTOR
-        else:
-            self.reward = 0.8 * self.reward
+        self.reward += ((self.HEADING_DIRECTION_DIFFERENCE_THRESHOLD - self.heading_direction_diff) / self.HEADING_DIRECTION_DIFFERENCE_THRESHOLD) * self.HEADING_FACTOR
 
     def progress_reward(self):
-        MAX_PROGRESS_REWARD_MULTIPLIER = 5
-        TIME_THRESHOLD = 10.0
-        progress_checkpoint = int(self.progress // 10)
-        print((self.progress * TIME_THRESHOLD / 100) / (self.steps / 15))
-        if self.intermediate_progress_reward[progress_checkpoint] == 0:
-            self.intermediate_progress_reward[progress_checkpoint] = MAX_PROGRESS_REWARD_MULTIPLIER * ((self.progress * TIME_THRESHOLD / 100) / (self.steps/15))
-            self.reward += self.intermediate_progress_reward[progress_checkpoint]
+        if int(self.progress) == 100:
+            self.reward += 100
+
+    def speed_reward(self):
+        if abs(self.steering_angle) < 7:
+            if self.speed >= 3.0:
+                self.reward += (self.speed / self.MAX_SPEED) * self.SPEED_FACTOR
+        elif abs(self.steering_angle) < 12:
+            if self.speed >= 3.0 and self.speed <= 3.6:
+                self.reward += (self.speed / self.MAX_SPEED) * self.SPEED_FACTOR
+        elif abs(self.steering_angle) < 18:
+            if self.speed >= 2.3 and self.speed <= 3.0:
+                self.reward += self.SPEED_FACTOR
+        elif abs(self.steering_angle) < 25:
+            if self.speed >= 1.8 and self.speed <= 2.5:
+                self.reward += self.SPEED_FACTOR
+        else:
+            if self.speed <= 2.0:
+                self.reward += (1.375 - (self.speed / self.MAX_SPEED)) * self.SPEED_FACTOR
 
     def reward_function(self, params):
         self.read_params(params)
@@ -118,8 +127,8 @@ class Reward:
         self.distance_reward()
         self.direction_reward()
         self.heading_reward()
-        self.steering_reward()
         self.progress_reward()
+        self.speed_reward()
         self.prev_steps = self.steps
 
         return self.reward

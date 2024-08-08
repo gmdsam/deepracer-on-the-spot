@@ -4,13 +4,14 @@ import math
 class Reward:
     DEFAULT_REWARD = 1e-4
     CAR_DIRECTION_DIFFERENCE_THRESHOLD = 5
-    CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR = 1.2
+    CAR_DIRECTION_DIFFERENCE_REWARD_FACTOR = 1.5
     HEADING_DIRECTION_DIFFERENCE_THRESHOLD = 15
-    HEADING_FACTOR = 1.0
+    HEADING_FACTOR = 0.5
     STEERING_THRESHOLD = 15
-    STEERING_FACTOR = 0.4
-    DISTANCE_FACTOR = 0.8
+    STEERING_FACTOR = 0.2
+    DISTANCE_FACTOR = 0.4
     SPEED_FACTOR = 1.0
+    PROGRESS_FACTOR = 2.0
     MIN_SPEED = 1.5
     MAX_SPEED = 4.0
 
@@ -95,6 +96,8 @@ class Reward:
         self.reward += ((self.HEADING_DIRECTION_DIFFERENCE_THRESHOLD - self.heading_direction_diff) / self.HEADING_DIRECTION_DIFFERENCE_THRESHOLD) * self.HEADING_FACTOR
 
     def progress_reward(self):
+        step_reward = (self.progress / self.steps) * self.PROGRESS_FACTOR
+        self.reward += step_reward
         if int(self.progress) == 100:
             self.reward += 100
 
